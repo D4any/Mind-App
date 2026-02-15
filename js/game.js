@@ -252,10 +252,14 @@ const Game = (() => {
     // ── Computed Stats ──────────────────────────────────
     function getComputedStats() {
         const s = state.stats;
-        const posTotal = s.posHits + s.posMisses;
-        const audioTotal = s.audioHits + s.audioMisses;
-        const posAcc = posTotal > 0 ? Math.round(s.posHits / posTotal * 100) : null;
-        const audioAcc = audioTotal > 0 ? Math.round(s.audioHits / audioTotal * 100) : null;
+        const posSignalTotal = s.posHits + s.posMisses;
+        const audioSignalTotal = s.audioHits + s.audioMisses;
+
+        const posTotal = s.posHits + s.posMisses + s.posFalseAlarms + s.posCorrectRejects;
+        const audioTotal = s.audioHits + s.audioMisses + s.audioFalseAlarms + s.audioCorrectRejects;
+
+        const posAcc = posTotal > 0 ? Math.round((s.posHits + s.posCorrectRejects) / posTotal * 100) : null;
+        const audioAcc = audioTotal > 0 ? Math.round((s.audioHits + s.audioCorrectRejects) / audioTotal * 100) : null;
 
         const allCorrect = s.posHits + s.posCorrectRejects + s.audioHits + s.audioCorrectRejects;
         const allTotal = allCorrect + s.posMisses + s.posFalseAlarms + s.audioMisses + s.audioFalseAlarms;
@@ -274,10 +278,10 @@ const Game = (() => {
 
         return {
             posHits: s.posHits, posMisses: s.posMisses,
-            posTotal, posAcc,
+            posTotal: posSignalTotal, posAcc,
             posFalseAlarms: s.posFalseAlarms,
             audioHits: s.audioHits, audioMisses: s.audioMisses,
-            audioTotal, audioAcc,
+            audioTotal: audioSignalTotal, audioAcc,
             audioFalseAlarms: s.audioFalseAlarms,
             overallAcc, avgRT,
             totalFalseAlarms: s.posFalseAlarms + s.audioFalseAlarms,
@@ -296,7 +300,7 @@ const Game = (() => {
         const computed = getComputedStats();
         const posAcc = computed.posAcc || 0;
         const audioAcc = computed.audioAcc || 0;
-        const overallAcc = Math.round((posAcc + audioAcc) / 2);
+        const overallAcc = computed.overallAcc ?? Math.round((posAcc + audioAcc) / 2);
 
         // Adaptive level change
         let adaptation = 'stay';
