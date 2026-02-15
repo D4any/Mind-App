@@ -3,7 +3,7 @@
    Cache-first strategy for full offline support
    ═══════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'dnb-v3';
+const CACHE_NAME = 'dnb-v4';
 const ASSETS = [
     '/',
     '/index.html',
@@ -44,17 +44,17 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
-    // For CDN resources (fonts, chart.js, tailwind, lucide), try network first
+    const fallbackResponse = () =>
+        caches.match(event.request).then(cached => {
+            if (cached) return cached;
+            if (event.request.mode === 'navigate') {
+                return caches.match('/index.html').then(indexCached => indexCached || Response.error());
+            }
+            return Response.error();
+        });
+
+    // Let browser handle external/CDN requests directly (keeps CSP strict and avoids SW fetch blocks)
     if (url.origin !== self.location.origin) {
-        event.respondWith(
-            fetch(event.request)
-                .then(response => {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-                    return response;
-                })
-                .catch(() => caches.match(event.request))
-        );
         return;
     }
 
@@ -69,7 +69,7 @@ self.addEventListener('fetch', event => {
                     caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
                     return response;
                 })
-                .catch(() => caches.match(event.request))
+                .catch(fallbackResponse)
         );
         return;
     }
@@ -81,6 +81,6 @@ self.addEventListener('fetch', event => {
                 const clone = response.clone();
                 caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
                 return response;
-            }))
+            }).catch(fallbackResponse))
     );
 });
