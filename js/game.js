@@ -255,15 +255,15 @@ const Game = (() => {
         const posSignalTotal = s.posHits + s.posMisses;
         const audioSignalTotal = s.audioHits + s.audioMisses;
 
-        const posTotal = s.posHits + s.posMisses + s.posFalseAlarms + s.posCorrectRejects;
-        const audioTotal = s.audioHits + s.audioMisses + s.audioFalseAlarms + s.audioCorrectRejects;
+        const posStrictTotal = s.posHits + s.posMisses + s.posFalseAlarms;
+        const audioStrictTotal = s.audioHits + s.audioMisses + s.audioFalseAlarms;
 
-        const posAcc = posTotal > 0 ? Math.round((s.posHits + s.posCorrectRejects) / posTotal * 100) : null;
-        const audioAcc = audioTotal > 0 ? Math.round((s.audioHits + s.audioCorrectRejects) / audioTotal * 100) : null;
+        const posAcc = posStrictTotal > 0 ? Math.round((s.posHits / posStrictTotal) * 100) : null;
+        const audioAcc = audioStrictTotal > 0 ? Math.round((s.audioHits / audioStrictTotal) * 100) : null;
 
-        const allCorrect = s.posHits + s.posCorrectRejects + s.audioHits + s.audioCorrectRejects;
-        const allTotal = allCorrect + s.posMisses + s.posFalseAlarms + s.audioMisses + s.audioFalseAlarms;
-        const overallAcc = allTotal > 0 ? Math.round(allCorrect / allTotal * 100) : null;
+        const overallHits = s.posHits + s.audioHits;
+        const overallStrictTotal = overallHits + s.posMisses + s.posFalseAlarms + s.audioMisses + s.audioFalseAlarms;
+        const overallAcc = overallStrictTotal > 0 ? Math.round((overallHits / overallStrictTotal) * 100) : null;
 
         const avgRT = s.reactionTimes.length > 0
             ? Math.round(s.reactionTimes.reduce((a, b) => a + b, 0) / s.reactionTimes.length)
