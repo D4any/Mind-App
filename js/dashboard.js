@@ -27,6 +27,7 @@ const Dashboard = (() => {
 
         hideEmptyDashboard();
         renderSummaryCards(stats);
+        renderInsights(stats);
         renderStreak(stats);
         renderDailyGoal(stats);
         renderRecords(stats);
@@ -70,6 +71,122 @@ const Dashboard = (() => {
         const h = Math.floor(minutes / 60);
         const m = minutes % 60;
         return h + 'h ' + m + 'min';
+    }
+
+    // ── Interpretable Insights (MVP) ───────────────────
+    function renderInsights(stats) {
+        const model = computeInsightModel(stats);
+
+        setText('dashQualityScore', `${model.qualityScore}/100`);
+        setText('dashErrorRate', `${model.errorRate}%`);
+        setText('dashDPrimeStatus', model.dPrimeLabel);
+        setText('dashRecommendation', model.recommendation);
+
+        const trendEl = document.getElementById('dashTrendDelta');
+        if (trendEl) {
+            const sign = model.trendDelta > 0 ? '+' : '';
+            trendEl.textContent = `Tendance: ${sign}${model.trendDelta}% (7 vs 7)`;
+            trendEl.style.color = model.trendDelta >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+        }
+
+        const qEl = document.getElementById('dashQualityScore');
+        if (qEl) {
+            qEl.classList.remove('text-neon-green', 'text-neon-yellow', 'text-neon-red');
+            if (model.qualityScore >= 75) qEl.classList.add('text-neon-green');
+            else if (model.qualityScore >= 55) qEl.classList.add('text-neon-yellow');
+            else qEl.classList.add('text-neon-red');
+        }
+
+        const errEl = document.getElementById('dashErrorRate');
+        if (errEl) {
+            errEl.classList.remove('text-neon-green', 'text-neon-yellow', 'text-neon-red');
+            if (model.errorRate <= 18) errEl.classList.add('text-neon-green');
+            else if (model.errorRate <= 30) errEl.classList.add('text-neon-yellow');
+            else errEl.classList.add('text-neon-red');
+        }
+
+        const dpEl = document.getElementById('dashDPrimeStatus');
+        if (dpEl) dpEl.style.color = model.dPrimeColor;
+    }
+
+    function computeInsightModel(stats) {
+        const sessions = [...(stats.sessions || [])].sort((a, b) => a.id - b.id);
+        const last = sessions[sessions.length - 1];
+        if (!last) {
+            return {
+                qualityScore: 0,
+                errorRate: 0,
+                dPrimeLabel: 'Aucune donnée',
+                dPrimeColor: 'var(--text-secondary)',
+                trendDelta: 0,
+                recommendation: 'Complète quelques sessions pour générer une recommandation fiable.'
+            };
+        }
+
+        const totalErrors = (last.posMisses || 0) + (last.audioMisses || 0) + (last.posFalseAlarms || 0) + (last.audioFalseAlarms || 0);
+        const totalAttempts = (last.posHits || 0) + (last.audioHits || 0) + totalErrors;
+        const errorRate = totalAttempts > 0 ? Math.round((totalErrors / totalAttempts) * 100) : 0;
+
+        const totalMiss = (last.posMisses || 0) + (last.audioMisses || 0);
+        const totalHits = (last.posHits || 0) + (last.audioHits || 0);
+        const totalFA = (last.posFalseAlarms || 0) + (last.audioFalseAlarms || 0);
+        const missRate = (totalHits + totalMiss) > 0 ? totalMiss / (totalHits + totalMiss) : 0;
+        const falseAlarmRate = totalAttempts > 0 ? totalFA / totalAttempts : 0;
+
+        const baseAcc = Number.isFinite(last.overallAccuracy) ? last.overallAccuracy : 0;
+        const rtPenalty = last.avgReactionTime > 1000 ? Math.min(12, Math.round((last.avgReactionTime - 1000) / 80)) : 0;
+        const faPenalty = Math.round(falseAlarmRate * 45);
+        const missPenalty = Math.round(missRate * 30);
+        const dPrimeBonus = last.overallDPrime != null ? Math.max(-8, Math.min(10, Math.round(last.overallDPrime * 2))) : 0;
+        const qualityScore = Math.max(0, Math.min(100, baseAcc - rtPenalty - faPenalty - missPenalty + dPrimeBonus));
+
+        let dPrimeLabel = 'd′ indisponible';
+        let dPrimeColor = 'var(--text-secondary)';
+        if (last.overallDPrime != null) {
+            if (last.overallDPrime >= 3) {
+                dPrimeLabel = `Excellent (${last.overallDPrime.toFixed(2)})`;
+                dPrimeColor = 'var(--neon-green)';
+            } else if (last.overallDPrime >= 1.5) {
+                dPrimeLabel = `Bon (${last.overallDPrime.toFixed(2)})`;
+                dPrimeColor = '#00e5ff';
+            } else if (last.overallDPrime >= 0.5) {
+                dPrimeLabel = `Moyen (${last.overallDPrime.toFixed(2)})`;
+                dPrimeColor = 'var(--neon-yellow)';
+            } else {
+                dPrimeLabel = `Faible (${last.overallDPrime.toFixed(2)})`;
+                dPrimeColor = 'var(--neon-red)';
+            }
+        }
+
+        const last7 = sessions.slice(-7);
+        const prev7 = sessions.slice(-14, -7);
+        const avgLast7 = avg(last7.map(s => s.overallAccuracy).filter(v => Number.isFinite(v)));
+        const avgPrev7 = prev7.length > 0 ? avg(prev7.map(s => s.overallAccuracy).filter(v => Number.isFinite(v))) : avgLast7;
+        const trendDelta = Number.isFinite(avgLast7) && Number.isFinite(avgPrev7)
+            ? Math.round((avgLast7 - avgPrev7) * 10) / 10
+            : 0;
+
+        let recommendation = 'Continue au même rythme, progression stable.';
+        if (falseAlarmRate >= 0.22) {
+            recommendation = 'Tu sur-réponds: appuie moins souvent, attends une vraie certitude avant de valider.';
+        } else if (missRate >= 0.30) {
+            recommendation = 'Tu rates des matches: ralentis légèrement ou baisse N pour mieux capter les signaux.';
+        } else if (last.avgReactionTime > 1200) {
+            recommendation = 'Temps de réaction élevé: garde N actuel et vise des réponses plus fluides avant de monter.';
+        } else if (last.overallDPrime != null && last.overallDPrime < 0.5) {
+            recommendation = 'Signal faible (d′): réduis la vitesse et priorise la précision sur 3-4 sessions.';
+        } else if (trendDelta >= 4) {
+            recommendation = 'Bonne dynamique: tu peux envisager +1 N si la stabilité reste bonne sur les prochaines sessions.';
+        }
+
+        return {
+            qualityScore,
+            errorRate,
+            dPrimeLabel,
+            dPrimeColor,
+            trendDelta,
+            recommendation
+        };
     }
 
     // ── Streak ──────────────────────────────────────────
@@ -246,14 +363,13 @@ const Dashboard = (() => {
 
     // ── Accuracy Over Time ──────────────────────────────
     function renderAccuracyChart(stats) {
-        const byDay = stats.byDay;
-        const days = Object.keys(byDay).sort();
-        if (days.length === 0) return;
+        const sessions = [...(stats.sessions || [])].sort((a, b) => a.id - b.id);
+        if (sessions.length === 0) return;
 
-        const labels = days.map(d => formatLabel(d));
-        const posData = days.map(d => avg(byDay[d].posAccs));
-        const audioData = days.map(d => avg(byDay[d].audioAccs));
-        const overallData = days.map(d => avg(byDay[d].accs));
+        const recent = sessions.slice(-40);
+        const labels = recent.map((_, idx) => `S${idx + 1}`);
+        const overallRaw = recent.map(s => Number.isFinite(s.overallAccuracy) ? s.overallAccuracy : null);
+        const overallSmoothed = rollingAverage(overallRaw, 7);
 
         destroyChart('accuracy');
         charts.accuracy = new Chart(document.getElementById('chartAccuracy'), {
@@ -262,35 +378,23 @@ const Dashboard = (() => {
                 labels,
                 datasets: [
                     {
-                        label: 'Overall',
-                        data: overallData,
+                        label: 'Tendance (moy. 7 sessions)',
+                        data: overallSmoothed,
                         borderColor: '#ffaf00',
                         backgroundColor: 'transparent',
-                        borderWidth: 2.5,
+                        borderWidth: 3,
                         tension: 0.35,
-                        pointRadius: 3,
+                        pointRadius: 0,
                         pointBackgroundColor: '#ffaf00',
-                        pointBorderColor: '#0a0e17',
-                        pointBorderWidth: 2
+                        spanGaps: true
                     },
                     {
-                        label: 'Position',
-                        data: posData,
-                        borderColor: '#00ff41',
+                        label: 'Brut (session)',
+                        data: overallRaw,
+                        borderColor: 'rgba(0,212,255,0.55)',
                         backgroundColor: 'transparent',
-                        borderWidth: 1.5,
-                        borderDash: [5, 3],
-                        tension: 0.35,
-                        pointRadius: 2,
-                        pointBackgroundColor: '#00ff41'
-                    },
-                    {
-                        label: 'Audio',
-                        data: audioData,
-                        borderColor: '#00d4ff',
-                        backgroundColor: 'transparent',
-                        borderWidth: 1.5,
-                        borderDash: [5, 3],
+                        borderWidth: 1.2,
+                        borderDash: [4, 4],
                         tension: 0.35,
                         pointRadius: 2,
                         pointBackgroundColor: '#00d4ff'
@@ -385,6 +489,15 @@ const Dashboard = (() => {
     function avg(arr) {
         if (!arr || arr.length === 0) return null;
         return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+    }
+
+    function rollingAverage(values, windowSize) {
+        return values.map((_, idx) => {
+            const from = Math.max(0, idx - windowSize + 1);
+            const slice = values.slice(from, idx + 1).filter(v => Number.isFinite(v));
+            if (slice.length === 0) return null;
+            return Math.round((slice.reduce((a, b) => a + b, 0) / slice.length) * 10) / 10;
+        });
     }
 
     function formatLabel(dateStr) {

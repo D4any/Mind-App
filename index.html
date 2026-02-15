@@ -367,6 +367,29 @@
                     </div>
                 </div>
 
+                <!-- Insights (MVP lisible) -->
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+                    <div class="card p-4">
+                        <div class="text-[10px] text-text-s uppercase tracking-wider mb-1">Session Quality</div>
+                        <div class="font-orbitron text-2xl font-bold text-neon-green" id="dashQualityScore">—</div>
+                        <div class="text-[10px] text-text-s mt-1">Score global interprétable</div>
+                    </div>
+                    <div class="card p-4">
+                        <div class="text-[10px] text-text-s uppercase tracking-wider mb-1">Taux d'erreurs</div>
+                        <div class="font-orbitron text-2xl font-bold text-neon-red" id="dashErrorRate">—</div>
+                        <div class="text-[10px] text-text-s mt-1">Miss + faux positifs</div>
+                    </div>
+                    <div class="card p-4">
+                        <div class="text-[10px] text-text-s uppercase tracking-wider mb-1">Interprétation d′</div>
+                        <div class="font-orbitron text-lg font-bold" id="dashDPrimeStatus" style="color:#00e5ff;">—</div>
+                        <div class="text-[10px] text-text-s mt-1" id="dashTrendDelta">Tendance: —</div>
+                    </div>
+                    <div class="card p-4">
+                        <div class="text-[10px] text-text-s uppercase tracking-wider mb-1">Action recommandée</div>
+                        <div class="text-[12px] text-text-p leading-relaxed" id="dashRecommendation">—</div>
+                    </div>
+                </div>
+
                 <!-- Today -->
                 <div class="card p-4">
                     <div class="terminal-header -mx-4 -mt-4 mb-4 rounded-none" style="border-radius: 7px 7px 0 0;">
@@ -494,7 +517,7 @@
                 <div class="card p-4">
                     <h3 class="text-[10px] text-text-s uppercase tracking-widest mb-3">
                         <i data-lucide="activity" class="w-3 h-3 inline mr-1"></i>
-                        Précision au Fil du Temps (%)
+                        Tendance Précision (Lissage 7 sessions)
                     </h3>
                     <div class="chart-wrapper"><canvas id="chartAccuracy"></canvas></div>
                 </div>
