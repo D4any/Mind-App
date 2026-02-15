@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dual N-Back Trainer</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00ff41">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Dual N-Back">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="description" content="Dual N-Back — Neural Training System pour la mémoire de travail">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'neon-green': '#00ff41',
+                        'neon-blue': '#00d4ff',
+                        'neon-red': '#ff3e3e',
+                        'neon-yellow': '#ffaf00',
+                        'neon-purple': '#b44aff',
+                        'bg-dark': '#0a0e17',
+                        'bg-card': '#111927',
+                        'bg-card-alt': '#0d1420',
+                        'border-c': '#1e2d3d',
+                        'text-p': '#c5d1de',
+                        'text-s': '#6b7d8e',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- App Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+    <!-- ═══ FEEDBACK FLASH ═══ -->
+    <div id="feedbackFlash" class="feedback-flash"></div>
+
+    <!-- ═══ RESULT OVERLAY ═══ -->
+    <div id="resultOverlay" class="result-overlay">
+        <div class="result-card">
+            <div id="resultContent"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         HEADER
+         ═══════════════════════════════════════════════════════ -->
+    <header class="border-b border-border-c px-6 py-3 flex items-center justify-between" style="background: rgba(10,14,23,0.95);">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: rgba(0,255,65,0.12); border: 1px solid rgba(0,255,65,0.2);">
+                <i data-lucide="brain" class="w-5 h-5 text-neon-green"></i>
+            </div>
+            <div>
+                <h1 class="font-orbitron text-base font-bold text-neon-green glow-green tracking-widest leading-tight">DUAL N-BACK</h1>
+                <span class="text-text-s text-[10px] tracking-wider">NEURAL TRAINING SYSTEM v3.0</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-5 text-[10px] text-text-s uppercase tracking-wider">
+            <span class="flex items-center gap-1"><i data-lucide="shield-check" class="w-3 h-3 text-neon-green"></i> Offline</span>
+            <span class="flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3 text-neon-green"></i> Zero Tracking</span>
+            <span class="flex items-center gap-1"><i data-lucide="cpu" class="w-3 h-3 text-neon-green"></i> Local Only</span>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════
+         MAIN
+         ═══════════════════════════════════════════════════════ -->
+    <main class="max-w-6xl mx-auto px-4 py-5">
+
+        <!-- ── Tabs ──────────────────────────────────────── -->
+        <div class="tabs">
+            <button class="tab-btn active" id="tab-game" onclick="UI.switchTab('game')">
+                <i data-lucide="crosshair" class="w-4 h-4"></i> Training
+            </button>
+            <button class="tab-btn" id="tab-dashboard" onclick="UI.switchTab('dashboard')">
+                <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Analytics
+            </button>
+            <button class="tab-btn" id="tab-history" onclick="UI.switchTab('history')">
+                <i data-lucide="database" class="w-4 h-4"></i> History
+            </button>
+            <button class="tab-btn" id="tab-help" onclick="UI.switchTab('help')">
+                <i data-lucide="help-circle" class="w-4 h-4"></i> Guide
+            </button>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════
+             GAME PANEL
+             ══════════════════════════════════════════════════ -->
+        <div id="panel-game" class="card panel p-5 fade-in">
+
+            <!-- Config Bar -->
+            <div id="configBar" class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-5 border-b border-border-c">
+                <div class="flex items-center gap-3">
+                    <span class="text-text-s text-[10px] uppercase tracking-widest">N-Level</span>
+                    <div class="n-adjuster">
+                        <button onclick="UI.adjustN(-1)">−</button>
+                        <span class="n-level-value" id="nLevelDisplay">2</span>
+                        <button onclick="UI.adjustN(1)">+</button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-text-s text-[10px] uppercase tracking-widest">Mode</span>
+                    <select id="modeSelect">
+                        <option value="adaptive">Adaptatif</option>
+                        <option value="manual">Manuel</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-text-s text-[10px] uppercase tracking-widest">Trials</span>
+                    <select id="trialsSelect">
+                        <option value="20">20</option>
+                        <option value="25" selected>25</option>
+                        <option value="30">30</option>
+                        <option value="40">40</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-text-s text-[10px] uppercase tracking-widest">Speed</span>
+                    <select id="speedSelect">
+                        <option value="4000">Very Slow (4s)</option>
+                        <option value="3500">Slow (3.5s)</option>
+                        <option value="3000" selected>Normal (3s)</option>
+                        <option value="2500">Fast (2.5s)</option>
+                        <option value="2000">Turbo (2s)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Focus Mode N-Level Badge -->
+            <div id="focusNBadge">
+                <span class="font-orbitron text-sm text-neon-green glow-green tracking-widest" id="focusNLevel">N = 2</span>
+                <span class="text-[10px] text-text-s uppercase tracking-wider">DUAL N-BACK</span>
+            </div>
+
+            <!-- Game Area -->
+            <div id="gameArea" class="flex flex-col lg:flex-row gap-6">
+
+                <!-- Left: Game Play -->
+                <div class="flex-1 flex flex-col items-center gap-4">
+
+                    <!-- Progress Bar -->
+                    <div id="progressContainer" class="w-full max-w-[310px]">
+                        <div class="flex justify-between text-[11px] text-text-s mb-1">
+                            <span>Trial <strong class="text-text-p" id="trialCurrent">0</strong>/<span id="trialTotal">25</span></span>
+                            <span id="sessionStatus" class="stat-value text-neon-green" style="font-size: 11px;">READY</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Letter Display -->
+                    <div class="letter-display" id="letterDisplay">—</div>
+
+                    <!-- 3×3 Grid -->
+                    <div class="game-grid">
+                        <div class="grid-cell" data-pos="0"></div>
+                        <div class="grid-cell" data-pos="1"></div>
+                        <div class="grid-cell" data-pos="2"></div>
+                        <div class="grid-cell" data-pos="3"></div>
+                        <div class="grid-cell" data-pos="4"></div>
+                        <div class="grid-cell" data-pos="5"></div>
+                        <div class="grid-cell" data-pos="6"></div>
+                        <div class="grid-cell" data-pos="7"></div>
+                        <div class="grid-cell" data-pos="8"></div>
+                    </div>
+
+                    <!-- Match Buttons -->
+                    <div class="flex gap-3 mt-1">
+                        <button id="btnPosition" class="btn btn-match" onclick="UI.matchPosition()">
+                            <i data-lucide="grid-3x3" class="w-4 h-4"></i>
+                            Position <span class="key-hint ml-1">←</span>
+                        </button>
+                        <button id="btnAudio" class="btn btn-match" onclick="UI.matchAudio()">
+                            <i data-lucide="volume-2" class="w-4 h-4"></i>
+                            Audio <span class="key-hint ml-1">→</span>
+                        </button>
+                    </div>
+
+                    <!-- Start -->
+                    <button id="btnStart" class="btn btn-primary mt-1" onclick="UI.toggleGame()">
+                        <i data-lucide="play" class="w-4 h-4"></i> START SESSION
+                    </button>
+                    <span id="startHint" class="text-text-s text-[10px]">ou appuyer sur <span class="key-hint">Espace</span></span>
+                </div>
+
+                <!-- Right: Live Stats -->
+                <div id="liveStatsPanel" class="w-full lg:w-64 space-y-3">
+
+                    <!-- Live Stats Panel -->
+                    <div class="card p-0 overflow-hidden">
+                        <div class="terminal-header">
+                            <div class="terminal-dot red"></div>
+                            <div class="terminal-dot yellow"></div>
+                            <div class="terminal-dot green"></div>
+                            <span class="terminal-title">live_stats.sh</span>
+                        </div>
+                        <div class="p-4 space-y-2 text-[12px]">
+                            <div class="stat-row">
+                                <span class="stat-label">Position Hits</span>
+                                <span id="statPosHits" class="stat-value text-neon-green">0/0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Audio Hits</span>
+                                <span id="statAudioHits" class="stat-value text-neon-green">0/0</span>
+                            </div>
+                            <div class="stat-row" style="border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 4px;">
+                                <span class="stat-label">Position Acc</span>
+                                <span id="statPosAcc" class="stat-value text-neon-blue">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Audio Acc</span>
+                                <span id="statAudioAcc" class="stat-value text-neon-blue">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Overall Acc</span>
+                                <span id="statOverallAcc" class="stat-value text-neon-yellow">—</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Avg RT</span>
+                                <span id="statAvgRT" class="stat-value text-neon-purple">—</span>
+                            </div>
+                            <div class="stat-row" style="border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 4px;">
+                                <span class="stat-label">False Alarms</span>
+                                <span id="statFalseAlarms" class="stat-value text-neon-red">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Misses</span>
+                                <span id="statMisses" class="stat-value text-neon-red">0</span>
+                            </div>
+                            <div class="stat-row" style="border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 4px;">
+                                <span class="stat-label">d′ Score</span>
+                                <span id="statDPrime" class="stat-value" style="color: #00e5ff;">—</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Tips -->
+                    <div class="card p-0 overflow-hidden" id="tipsPanel">
+                        <div class="terminal-header">
+                            <div class="terminal-dot red"></div>
+                            <div class="terminal-dot yellow"></div>
+                            <div class="terminal-dot green"></div>
+                            <span class="terminal-title">tips.md</span>
+                        </div>
+                        <div class="p-3 text-[10px] text-text-s leading-relaxed space-y-1">
+                            <p>→ <span class="key-hint">←</span> si la <strong class="text-text-p">position</strong> = il y a N tours</p>
+                            <p>→ <span class="key-hint">→</span> si le <strong class="text-text-p">son</strong> = il y a N tours</p>
+                            <p>→ Tu peux appuyer sur les deux !</p>
+                            <p>→ Ne rien appuyer si pas de match</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════
+             DASHBOARD PANEL
+             ══════════════════════════════════════════════════ -->
+        <div id="panel-dashboard" class="card panel p-5 hidden fade-in">
+
+            <!-- Empty State -->
+            <div id="dashEmpty" class="empty-state hidden">
+                <div class="empty-icon">
+                    <i data-lucide="bar-chart-3" class="w-16 h-16"></i>
+                </div>
+                <h3>Aucune donnée analytique</h3>
+                <p>Commence une session d'entraînement pour voir tes statistiques et graphiques de progression ici.</p>
+                <div class="flex gap-2 justify-center mt-4">
+                    <button onclick="UI.switchTab('game')" class="btn btn-primary" style="padding:10px 20px;">
+                        <i data-lucide="play" class="w-4 h-4"></i> Commencer
+                    </button>
+                    <button onclick="Storage.generateDemoData(); Dashboard.render();" class="btn" style="padding:10px 20px;">
+                        <i data-lucide="flask-conical" class="w-4 h-4"></i> Données Démo
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dashboard Content -->
+            <div id="dashContent" class="space-y-5">
+
+                <!-- Top Row: Summary + Streak + Today -->
+                <div class="flex flex-wrap gap-3">
+                    <div class="card stat-card">
+                        <div class="stat-label">Sessions Totales</div>
+                        <div class="stat-big text-neon-green glow-green" id="dashTotalSessions">0</div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="stat-label">Max N-Level</div>
+                        <div class="stat-big text-neon-blue glow-blue" id="dashMaxN">0</div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="stat-label">Meilleure Précision</div>
+                        <div class="stat-big text-neon-yellow" id="dashBestAcc">0%</div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="stat-label">Meilleur RT</div>
+                        <div class="stat-big text-neon-purple" id="dashBestRT">—</div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="stat-label">Best d′</div>
+                        <div class="stat-big" style="color: #00e5ff; text-shadow: 0 0 10px #00e5ff, 0 0 30px rgba(0,229,255,0.2);" id="dashBestDPrime">—</div>
+                    </div>
+                </div>
+
+                <!-- Second row: More stats -->
+                <div class="flex flex-wrap gap-3">
+                    <div class="card p-4 flex-1 min-w-[120px]">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-[10px] text-text-s uppercase tracking-wider mb-1">Trials Totaux</div>
+                                <div class="font-orbitron text-lg font-bold text-text-p" id="dashTotalTrials">0</div>
+                            </div>
+                            <i data-lucide="target" class="w-5 h-5 text-text-s opacity-30"></i>
+                        </div>
+                    </div>
+                    <div class="card p-4 flex-1 min-w-[120px]">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-[10px] text-text-s uppercase tracking-wider mb-1">Temps Total</div>
+                                <div class="font-orbitron text-lg font-bold text-text-p" id="dashTotalTime">0min</div>
+                            </div>
+                            <i data-lucide="clock" class="w-5 h-5 text-text-s opacity-30"></i>
+                        </div>
+                    </div>
+                    <div class="card p-4 flex-1 min-w-[120px]">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-[10px] text-text-s uppercase tracking-wider mb-1">RT Moyen</div>
+                                <div class="font-orbitron text-lg font-bold text-neon-purple" id="dashAvgRT">—</div>
+                            </div>
+                            <i data-lucide="zap" class="w-5 h-5 text-text-s opacity-30"></i>
+                        </div>
+                    </div>
+
+                    <!-- Streak -->
+                    <div class="card p-4 flex-1 min-w-[120px]" id="streakContainer">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-[10px] text-text-s uppercase tracking-wider mb-1">Streak 🔥</div>
+                                <div class="font-orbitron text-lg font-bold text-neon-green" id="streakCount">0</div>
+                            </div>
+                            <span class="text-2xl">🔥</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Today -->
+                <div class="card p-4">
+                    <div class="terminal-header -mx-4 -mt-4 mb-4 rounded-none" style="border-radius: 7px 7px 0 0;">
+                        <div class="terminal-dot red"></div>
+                        <div class="terminal-dot yellow"></div>
+                        <div class="terminal-dot green"></div>
+                        <span class="terminal-title">today_report.sh</span>
+                    </div>
+                    <div class="flex flex-wrap gap-6 items-center">
+                        <div>
+                            <div class="text-[10px] text-text-s uppercase tracking-wider">Sessions Aujourd'hui</div>
+                            <div class="font-orbitron text-2xl font-bold text-neon-green mt-1" id="dashTodayCount">0</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] text-text-s uppercase tracking-wider">Max N Aujourd'hui</div>
+                            <div class="font-orbitron text-2xl font-bold text-neon-blue mt-1" id="dashTodayMaxN">—</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] text-text-s uppercase tracking-wider">Précision Moy.</div>
+                            <div class="font-orbitron text-2xl font-bold text-neon-yellow mt-1" id="dashTodayAvgAcc">—</div>
+                        </div>
+
+                        <!-- Daily Goal -->
+                        <div class="flex-1 min-w-[200px]">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="text-[10px] text-text-s uppercase tracking-wider flex items-center gap-1">
+                                    🎯 Objectif Quotidien
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <button onclick="Dashboard.adjustGoal(-1)" class="text-text-s hover:text-neon-green text-xs px-1" style="cursor:pointer; background:none; border:none;">−</button>
+                                    <span class="font-orbitron text-xs text-text-p" id="dailyGoalValue">5</span>
+                                    <button onclick="Dashboard.adjustGoal(1)" class="text-text-s hover:text-neon-green text-xs px-1" style="cursor:pointer; background:none; border:none;">+</button>
+                                    <span class="text-[9px] text-text-s">sessions</span>
+                                </div>
+                            </div>
+                            <div class="progress-bar" style="height: 12px;">
+                                <div id="dailyGoalFill" class="progress-fill" style="width: 0%; transition: width 0.6s ease;"></div>
+                            </div>
+                            <div class="flex justify-between mt-1">
+                                <span class="text-[9px] text-text-s" id="dailyGoalText">0 / 5</span>
+                                <span class="text-[9px]" id="dailyGoalStatus" style="color: var(--text-secondary);">En cours</span>
+                            </div>
+                        </div>
+
+                        <div class="flex-1">
+                            <div class="text-[10px] text-text-s uppercase tracking-wider mb-2">7 Derniers Jours</div>
+                            <div id="weeklyBars" class="flex gap-1" style="min-height: 80px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Records -->
+                <div class="card p-4" id="recordsSection">
+                    <div class="terminal-header -mx-4 -mt-4 mb-4 rounded-none" style="border-radius: 7px 7px 0 0;">
+                        <div class="terminal-dot red"></div>
+                        <div class="terminal-dot yellow"></div>
+                        <div class="terminal-dot green"></div>
+                        <span class="terminal-title">records.trophy</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" id="recordsGrid">
+                        <div class="card card-alt p-3 text-center">
+                            <div class="text-lg mb-1">🧠</div>
+                            <div class="text-[9px] text-text-s uppercase tracking-wider mb-1">Max N-Level</div>
+                            <div class="font-orbitron text-lg font-bold text-neon-green" id="recMaxN">—</div>
+                        </div>
+                        <div class="card card-alt p-3 text-center">
+                            <div class="text-lg mb-1">🎯</div>
+                            <div class="text-[9px] text-text-s uppercase tracking-wider mb-1">Meilleure Précision</div>
+                            <div class="font-orbitron text-lg font-bold text-neon-yellow" id="recBestAcc">—</div>
+                        </div>
+                        <div class="card card-alt p-3 text-center">
+                            <div class="text-lg mb-1">⚡</div>
+                            <div class="text-[9px] text-text-s uppercase tracking-wider mb-1">Meilleur RT</div>
+                            <div class="font-orbitron text-lg font-bold text-neon-purple" id="recBestRT">—</div>
+                        </div>
+                        <div class="card card-alt p-3 text-center">
+                            <div class="text-lg mb-1">📊</div>
+                            <div class="text-[9px] text-text-s uppercase tracking-wider mb-1">Best d′</div>
+                            <div class="font-orbitron text-lg font-bold" style="color: #00e5ff;" id="recBestDP">—</div>
+                        </div>
+                        <div class="card card-alt p-3 text-center">
+                            <div class="text-lg mb-1">🔥</div>
+                            <div class="text-[9px] text-text-s uppercase tracking-wider mb-1">Meilleur Streak</div>
+                            <div class="font-orbitron text-lg font-bold text-neon-green" id="recStreak">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Heatmap -->
+                <div class="card p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-[10px] text-text-s uppercase tracking-widest">Activité (90 jours)</h3>
+                        <div class="flex items-center gap-1 text-[9px] text-text-s">
+                            <span>Moins</span>
+                            <div class="w-3 h-3 rounded-sm" style="background: var(--bg-card-alt); border: 1px solid rgba(30,45,61,0.3);"></div>
+                            <div class="w-3 h-3 rounded-sm" style="background: rgba(0,255,65,0.15);"></div>
+                            <div class="w-3 h-3 rounded-sm" style="background: rgba(0,255,65,0.3);"></div>
+                            <div class="w-3 h-3 rounded-sm" style="background: rgba(0,255,65,0.5);"></div>
+                            <div class="w-3 h-3 rounded-sm" style="background: rgba(0,255,65,0.8);"></div>
+                            <span>Plus</span>
+                        </div>
+                    </div>
+                    <div id="heatmapGrid" class="heatmap-grid"></div>
+                </div>
+
+                <!-- Charts Row 1 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="card p-4">
+                        <h3 class="text-[10px] text-text-s uppercase tracking-widest mb-3">
+                            <i data-lucide="trending-up" class="w-3 h-3 inline mr-1"></i>
+                            Max N-Level par Jour
+                        </h3>
+                        <div class="chart-wrapper"><canvas id="chartNLevel"></canvas></div>
+                    </div>
+                    <div class="card p-4">
+                        <h3 class="text-[10px] text-text-s uppercase tracking-widest mb-3">
+                            <i data-lucide="zap" class="w-3 h-3 inline mr-1"></i>
+                            Temps de Réaction Moyen (ms)
+                        </h3>
+                        <div class="chart-wrapper"><canvas id="chartRT"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Chart Row 2 -->
+                <div class="card p-4">
+                    <h3 class="text-[10px] text-text-s uppercase tracking-widest mb-3">
+                        <i data-lucide="activity" class="w-3 h-3 inline mr-1"></i>
+                        Précision au Fil du Temps (%)
+                    </h3>
+                    <div class="chart-wrapper"><canvas id="chartAccuracy"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════
+             HISTORY PANEL
+             ══════════════════════════════════════════════════ -->
+        <div id="panel-history" class="card panel p-5 hidden fade-in">
+
+            <!-- Empty State -->
+            <div id="historyEmpty" class="empty-state hidden">
+                <div class="empty-icon">
+                    <i data-lucide="database" class="w-16 h-16"></i>
+                </div>
+                <h3>Aucune session enregistrée</h3>
+                <p>Toutes tes sessions seront sauvegardées ici automatiquement. Lance ta première session pour commencer !</p>
+                <div class="flex gap-2 justify-center mt-4">
+                    <button onclick="UI.switchTab('game')" class="btn btn-primary" style="padding:10px 20px;">
+                        <i data-lucide="play" class="w-4 h-4"></i> S'entraîner
+                    </button>
+                    <button onclick="Storage.generateDemoData(); History.render();" class="btn" style="padding:10px 20px;">
+                        <i data-lucide="flask-conical" class="w-4 h-4"></i> Données Démo
+                    </button>
+                </div>
+            </div>
+
+            <!-- History Content -->
+            <div id="historyContent">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <h2 class="font-orbitron text-xs text-neon-green uppercase tracking-widest">Sessions</h2>
+                        <span class="badge badge-green" id="historyCount">0</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="Storage.exportJSON()" class="btn" style="padding:6px 14px; font-size:10px;">
+                            <i data-lucide="download" class="w-3 h-3"></i> JSON
+                        </button>
+                        <button onclick="Storage.exportCSV()" class="btn" style="padding:6px 14px; font-size:10px;">
+                            <i data-lucide="file-spreadsheet" class="w-3 h-3"></i> CSV
+                        </button>
+                        <button onclick="History.clearAll()" class="btn btn-danger" style="padding:6px 14px; font-size:10px;">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i> Tout supprimer
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="id" onclick="History.setSort('id')"># <span class="sort-arrow"></span></th>
+                                <th data-sort="date" onclick="History.setSort('date')">Date <span class="sort-arrow">↓</span></th>
+                                <th data-sort="nLevel" onclick="History.setSort('nLevel')" class="text-center">N <span class="sort-arrow"></span></th>
+                                <th data-sort="trials" onclick="History.setSort('trials')" class="text-center">Trials <span class="sort-arrow"></span></th>
+                                <th data-sort="positionAccuracy" onclick="History.setSort('positionAccuracy')" class="text-center">Pos% <span class="sort-arrow"></span></th>
+                                <th data-sort="audioAccuracy" onclick="History.setSort('audioAccuracy')" class="text-center">Audio% <span class="sort-arrow"></span></th>
+                                <th data-sort="overallAccuracy" onclick="History.setSort('overallAccuracy')" class="text-center">Global <span class="sort-arrow"></span></th>
+                                <th data-sort="avgReactionTime" onclick="History.setSort('avgReactionTime')" class="text-center">RT <span class="sort-arrow"></span></th>
+                                <th data-sort="overallDPrime" onclick="History.setSort('overallDPrime')" class="text-center">d′ <span class="sort-arrow"></span></th>
+                                <th class="text-center">Adapt.</th>
+                                <th class="text-center" style="width:40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════
+             HELP PANEL
+             ══════════════════════════════════════════════════ -->
+        <div id="panel-help" class="card panel p-5 hidden fade-in">
+            <div class="max-w-3xl mx-auto space-y-4">
+
+                <div class="card p-5">
+                    <h3 class="font-orbitron text-sm text-neon-green uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i data-lucide="brain" class="w-4 h-4"></i> Qu'est-ce que le Dual N-Back ?
+                    </h3>
+                    <p class="text-sm text-text-s leading-relaxed">
+                        Le Dual N-Back est l'un des rares exercices cognitifs scientifiquement prouvé pour améliorer la
+                        <strong class="text-text-p">mémoire de travail</strong> et l'<strong class="text-text-p">intelligence fluide</strong>.
+                        Tu dois suivre simultanément deux flux de stimuli (position + son) et détecter les correspondances
+                        avec ce qui s'est passé <strong class="text-neon-green">N tours avant</strong>.
+                    </p>
+                </div>
+
+                <div class="card p-5">
+                    <h3 class="font-orbitron text-sm text-neon-blue uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i data-lucide="gamepad-2" class="w-4 h-4"></i> Comment Jouer
+                    </h3>
+                    <div class="space-y-3 text-sm text-text-s leading-relaxed">
+                        <p>À chaque tour, un <strong class="text-text-p">carré s'allume</strong> sur la grille 3×3 et une <strong class="text-text-p">lettre est prononcée</strong>.</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="card card-alt p-3">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="key-hint text-sm">←</span>
+                                    <strong class="text-neon-green text-xs uppercase">Position Match</strong>
+                                </div>
+                                <p class="text-[11px]">Appuie si la position actuelle = celle d'il y a N tours</p>
+                            </div>
+                            <div class="card card-alt p-3">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="key-hint text-sm">→</span>
+                                    <strong class="text-neon-blue text-xs uppercase">Audio Match</strong>
+                                </div>
+                                <p class="text-[11px]">Appuie si la lettre actuelle = celle d'il y a N tours</p>
+                            </div>
+                        </div>
+                        <p>⚡ Tu peux appuyer sur <strong class="text-text-p">les deux</strong> si les deux correspondent !</p>
+                        <p>✋ Ne rien appuyer s'il n'y a aucune correspondance.</p>
+                    </div>
+                </div>
+
+                <div class="card p-5">
+                    <h3 class="font-orbitron text-sm text-neon-yellow uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i data-lucide="settings" class="w-4 h-4"></i> Mode Adaptatif
+                    </h3>
+                    <div class="space-y-2 text-sm text-text-s">
+                        <div class="flex items-center gap-3">
+                            <span class="badge badge-green">≥ 80%</span>
+                            <span>Le N-level augmente automatiquement (+1)</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="badge badge-yellow">50-79%</span>
+                            <span>Le N-level reste identique</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="badge badge-red">&lt; 50%</span>
+                            <span>Le N-level diminue (−1, minimum 1)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-5">
+                    <h3 class="font-orbitron text-sm uppercase tracking-wider mb-3 flex items-center gap-2" style="color: #00e5ff;">
+                        <i data-lucide="bar-chart-2" class="w-4 h-4"></i> Score d′ (d-prime)
+                    </h3>
+                    <div class="space-y-2 text-sm text-text-s leading-relaxed">
+                        <p>Le <strong style="color: #00e5ff;">d′ (d-prime)</strong> est une mesure de la théorie de détection du signal qui évalue ta capacité à distinguer les <em>vrais matchs</em> des <em>non-matchs</em>, indépendamment de ta tendance à appuyer.</p>
+                        <p>Contrairement au % de précision, le d′ pénalise les <strong class="text-text-p">fausses alarmes</strong> (appuyer quand il n'y a pas de match).</p>
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div class="card card-alt p-2 text-center">
+                                <div class="font-bold text-neon-red text-xs">d′ &lt; 0</div>
+                                <div class="text-[10px]">Pire que le hasard</div>
+                            </div>
+                            <div class="card card-alt p-2 text-center">
+                                <div class="font-bold text-neon-yellow text-xs">d′ 0–1.5</div>
+                                <div class="text-[10px]">Détection faible</div>
+                            </div>
+                            <div class="card card-alt p-2 text-center">
+                                <div class="font-bold text-xs" style="color: #00e5ff;">d′ 1.5–3</div>
+                                <div class="text-[10px]">Bonne détection</div>
+                            </div>
+                            <div class="card card-alt p-2 text-center">
+                                <div class="font-bold text-neon-green text-xs">d′ &gt; 3</div>
+                                <div class="text-[10px]">Excellent</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-5">
+                    <h3 class="font-orbitron text-sm text-neon-purple uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i data-lucide="lightbulb" class="w-4 h-4"></i> Conseils de Pro
+                    </h3>
+                    <ul class="space-y-2 text-sm text-text-s">
+                        <li class="flex items-start gap-2"><span class="text-neon-green">▸</span> Commence à N=2 et monte progressivement</li>
+                        <li class="flex items-start gap-2"><span class="text-neon-green">▸</span> Entraîne-toi 15-20 minutes par jour pour des résultats optimaux</li>
+                        <li class="flex items-start gap-2"><span class="text-neon-green">▸</span> La régularité est plus importante que la durée</li>
+                        <li class="flex items-start gap-2"><span class="text-neon-green">▸</span> Privilégie la précision à la vitesse au début</li>
+                        <li class="flex items-start gap-2"><span class="text-neon-green">▸</span> Les premières sessions sont déroutantes — c'est normal !</li>
+                        <li class="flex items-start gap-2"><span class="text-neon-green">▸</span> Consulte l'onglet Analytics pour suivre ta progression</li>
+                    </ul>
+                </div>
+
+                <div class="card p-5">
+                    <h3 class="font-orbitron text-sm text-text-s uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i data-lucide="shield" class="w-4 h-4"></i> Confidentialité
+                    </h3>
+                    <p class="text-sm text-text-s leading-relaxed">
+                        Cette application fonctionne <strong class="text-neon-green">100% en local</strong>.
+                        Aucune donnée n'est envoyée à un serveur. Tout est stocké dans le <code class="text-neon-blue">localStorage</code> de ton navigateur.
+                        Tu peux exporter tes données en JSON/CSV à tout moment depuis l'onglet History.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ═══════════════════════════════════════════════════════
+         FOOTER
+         ═══════════════════════════════════════════════════════ -->
+    <footer class="border-t border-border-c px-6 py-3 mt-4 text-center text-text-s text-[10px] tracking-wider">
+        <span class="text-neon-green">●</span> DUAL N-BACK TRAINER — 100% Local — Zero Tracking — Neural Enhancement System
+    </footer>
+
+    <!-- ═══════════════════════════════════════════════════════
+         SCRIPTS (order matters)
+         ═══════════════════════════════════════════════════════ -->
+    <script src="js/storage.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/history.js"></script>
+    <script src="js/ui.js"></script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('[SW] Registered:', reg.scope))
+                    .catch(err => console.log('[SW] Registration failed (safe to ignore on file://):', err));
+            });
+        }
+    </script>
+
+</body>
+</html>

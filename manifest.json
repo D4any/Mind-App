@@ -1,0 +1,25 @@
+{
+    "name": "Dual N-Back Trainer",
+    "short_name": "Dual N-Back",
+    "description": "Neural Training System — Entraînement cognitif Dual N-Back",
+    "start_url": "/index.html",
+    "display": "standalone",
+    "background_color": "#0a0e17",
+    "theme_color": "#00ff41",
+    "orientation": "any",
+    "categories": ["education", "health"],
+    "icons": [
+        {
+            "src": "icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
