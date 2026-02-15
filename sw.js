@@ -3,7 +3,7 @@
    Cache-first strategy for full offline support
    ═══════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'dnb-v2';
+const CACHE_NAME = 'dnb-v3';
 const ASSETS = [
     '/',
     '/index.html',
@@ -37,7 +37,10 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Fetch: cache-first for local assets, network-first for CDN
+// Fetch strategy:
+// - Navigation + core app shell (html/js/css): network-first (prevents stale refresh bugs)
+// - External CDN: network-first with cache fallback
+// - Other local assets: cache-first
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
@@ -55,7 +58,23 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // For local assets, cache-first
+    const isNavigation = event.request.mode === 'navigate';
+    const isAppShellAsset = /\.(?:html|js|css)$/.test(url.pathname);
+
+    if (isNavigation || isAppShellAsset) {
+        event.respondWith(
+            fetch(event.request)
+                .then(response => {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    return response;
+                })
+                .catch(() => caches.match(event.request))
+        );
+        return;
+    }
+
+    // For other local assets, cache-first
     event.respondWith(
         caches.match(event.request)
             .then(cached => cached || fetch(event.request).then(response => {
