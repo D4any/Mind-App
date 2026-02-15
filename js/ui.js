@@ -55,11 +55,15 @@ const UI = (() => {
     }
 
     function getConfig() {
+        const trials = Number.parseInt(document.getElementById('trialsSelect').value, 10);
+        const speed = Number.parseInt(document.getElementById('speedSelect').value, 10);
+        const modeValue = document.getElementById('modeSelect').value;
+
         return {
             nLevel,
-            trials: parseInt(document.getElementById('trialsSelect').value),
-            speed: parseInt(document.getElementById('speedSelect').value),
-            mode: document.getElementById('modeSelect').value
+            trials: Number.isFinite(trials) ? Math.min(1000, Math.max(1, trials)) : 25,
+            speed: Number.isFinite(speed) ? Math.min(10000, Math.max(1000, speed)) : 3000,
+            mode: modeValue === 'manual' ? 'manual' : 'adaptive'
         };
     }
 
@@ -178,7 +182,7 @@ const UI = (() => {
         // Check for new records
         const lastSessions = Storage.getSessions();
         const lastSession = lastSessions[lastSessions.length - 1];
-        const newRecords = Storage.checkNewRecords(lastSession);
+        const newRecords = lastSession ? Storage.checkNewRecords(lastSession) : {};
 
         // Build record badges
         let recordsHTML = '';

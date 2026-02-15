@@ -8,10 +8,94 @@ const Storage = (() => {
     const SESSIONS_KEY = 'dnb_sessions';
     const SETTINGS_KEY = 'dnb_settings';
 
+    const LIMITS = {
+        nLevel: { min: 1, max: 15 },
+        trials: { min: 1, max: 1000 },
+        speed: { min: 1000, max: 10000 },
+        accuracy: { min: 0, max: 100 },
+        reactionTime: { min: 0, max: 20000 },
+        count: { min: 0, max: 10000 },
+        dPrime: { min: -6, max: 6 },
+        dailyGoal: { min: 1, max: 20 }
+    };
+
+    function toNumber(value) {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : null;
+    }
+
+    function clamp(num, min, max) {
+        return Math.min(max, Math.max(min, num));
+    }
+
+    function toIntInRange(value, min, max, fallback = min) {
+        const num = toNumber(value);
+        if (num === null) return fallback;
+        return Math.round(clamp(num, min, max));
+    }
+
+    function toFloatInRange(value, min, max, fallback = null, decimals = 2) {
+        const num = toNumber(value);
+        if (num === null) return fallback;
+        const clamped = clamp(num, min, max);
+        const factor = 10 ** decimals;
+        return Math.round(clamped * factor) / factor;
+    }
+
+    function toISODate(value) {
+        const t = new Date(value).getTime();
+        return Number.isFinite(t) ? new Date(t).toISOString() : new Date().toISOString();
+    }
+
+    function normalizeAdaptation(value) {
+        return value === 'up' || value === 'down' ? value : 'stay';
+    }
+
+    function normalizeSession(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+
+        const normalized = {
+            id: toIntInRange(raw.id, 1, Number.MAX_SAFE_INTEGER, Date.now()),
+            date: toISODate(raw.date),
+            nLevel: toIntInRange(raw.nLevel, LIMITS.nLevel.min, LIMITS.nLevel.max, 2),
+            trials: toIntInRange(raw.trials, LIMITS.trials.min, LIMITS.trials.max, 25),
+            speed: toIntInRange(raw.speed, LIMITS.speed.min, LIMITS.speed.max, 3000),
+            positionAccuracy: toIntInRange(raw.positionAccuracy, LIMITS.accuracy.min, LIMITS.accuracy.max, 0),
+            audioAccuracy: toIntInRange(raw.audioAccuracy, LIMITS.accuracy.min, LIMITS.accuracy.max, 0),
+            overallAccuracy: toIntInRange(raw.overallAccuracy, LIMITS.accuracy.min, LIMITS.accuracy.max, 0),
+            avgReactionTime: toIntInRange(raw.avgReactionTime, LIMITS.reactionTime.min, LIMITS.reactionTime.max, 0),
+            posHits: toIntInRange(raw.posHits, LIMITS.count.min, LIMITS.count.max, 0),
+            posMisses: toIntInRange(raw.posMisses, LIMITS.count.min, LIMITS.count.max, 0),
+            posFalseAlarms: toIntInRange(raw.posFalseAlarms, LIMITS.count.min, LIMITS.count.max, 0),
+            audioHits: toIntInRange(raw.audioHits, LIMITS.count.min, LIMITS.count.max, 0),
+            audioMisses: toIntInRange(raw.audioMisses, LIMITS.count.min, LIMITS.count.max, 0),
+            audioFalseAlarms: toIntInRange(raw.audioFalseAlarms, LIMITS.count.min, LIMITS.count.max, 0),
+            posDPrime: toFloatInRange(raw.posDPrime, LIMITS.dPrime.min, LIMITS.dPrime.max, null, 2),
+            audioDPrime: toFloatInRange(raw.audioDPrime, LIMITS.dPrime.min, LIMITS.dPrime.max, null, 2),
+            overallDPrime: toFloatInRange(raw.overallDPrime, LIMITS.dPrime.min, LIMITS.dPrime.max, null, 2),
+            adaptation: normalizeAdaptation(raw.adaptation)
+        };
+
+        return normalized;
+    }
+
+    function sanitizeSessions(sessions) {
+        if (!Array.isArray(sessions)) return [];
+        return sessions
+            .map(normalizeSession)
+            .filter(Boolean)
+            .sort((a, b) => a.id - b.id);
+    }
+
     // ── Sessions ────────────────────────────────────────
     function getSessions() {
         try {
-            return JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
+            const raw = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
+            const sanitized = sanitizeSessions(raw);
+            if (!Array.isArray(raw) || sanitized.length !== raw.length) {
+                localStorage.setItem(SESSIONS_KEY, JSON.stringify(sanitized));
+            }
+            return sanitized;
         } catch {
             return [];
         }
@@ -19,15 +103,20 @@ const Storage = (() => {
 
     function saveSession(session) {
         const sessions = getSessions();
-        session.id = Date.now();
-        session.date = new Date().toISOString();
-        sessions.push(session);
+        const normalized = normalizeSession({
+            ...session,
+            id: Date.now(),
+            date: new Date().toISOString()
+        });
+        if (!normalized) return null;
+        sessions.push(normalized);
         localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-        return session;
+        return normalized;
     }
 
     function deleteSession(id) {
-        const sessions = getSessions().filter(s => s.id !== id);
+        const targetId = toIntInRange(id, 1, Number.MAX_SAFE_INTEGER, -1);
+        const sessions = getSessions().filter(s => s.id !== targetId);
         localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
     }
 
@@ -38,7 +127,22 @@ const Storage = (() => {
     // ── Settings ────────────────────────────────────────
     function getSettings() {
         try {
-            return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+            const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+            const settings = (raw && typeof raw === 'object') ? { ...raw } : {};
+
+            const dailyGoal = toIntInRange(
+                settings.dailyGoal,
+                LIMITS.dailyGoal.min,
+                LIMITS.dailyGoal.max,
+                5
+            );
+
+            const normalized = { ...settings, dailyGoal };
+            if (!raw || typeof raw !== 'object' || raw.dailyGoal !== dailyGoal) {
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalized));
+            }
+
+            return normalized;
         } catch {
             return {};
         }
@@ -46,7 +150,11 @@ const Storage = (() => {
 
     function saveSetting(key, value) {
         const settings = getSettings();
-        settings[key] = value;
+        if (key === 'dailyGoal') {
+            settings[key] = toIntInRange(value, LIMITS.dailyGoal.min, LIMITS.dailyGoal.max, 5);
+        } else {
+            settings[key] = value;
+        }
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     }
 
